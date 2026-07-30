@@ -7,6 +7,7 @@ FSP_CPP_FOOTER
 #include "led/led.h"
 #include "key_button/key.h"
 #include "uart/uart.h"
+#include "eeprom/eeprom.h"
 
 void hal_entry(void)
 {
@@ -16,6 +17,7 @@ void hal_entry(void)
 
     key_init();
     uart_init();
+    eeprom_init();
 
     printf("\r\n=== 启明6T2 调试串口 ===\r\n");
     printf("输入 help 查看指令\r\n");

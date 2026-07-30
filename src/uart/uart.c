@@ -1,5 +1,6 @@
 #include "uart.h"
 #include "led/led.h"
+#include "eeprom/eeprom.h"
 #include <string.h>
 
 /* ── 发送完成 ── */
@@ -59,7 +60,30 @@ void uart_process_cmd(void)
     else if (strcmp(uart_cmd_buf, "led2 on")  == 0) led_on(LED_2);
     else if (strcmp(uart_cmd_buf, "led2 off") == 0) led_off(LED_2);
     else if (strcmp(uart_cmd_buf, "help")     == 0) {
-        printf("led1 on/off  led2 on/off  help\r\n");
+        printf("led1/2 on/off  eeprom  eetest  help\r\n");
+    }
+    else if (strcmp(uart_cmd_buf, "eeprom")  == 0) {
+        uint8_t d;
+        eeprom_read_byte(0x50, &d);
+        printf("before: 0x50=0x%02X\r\n", d);
+        eeprom_write_byte(0x50, 0xA5);
+        R_BSP_SoftwareDelay(10, BSP_DELAY_UNITS_MILLISECONDS);
+        eeprom_read_byte(0x50, &d);
+        printf("after:  0x50=0x%02X %s\r\n", d, d==0xA5?"PASS":"FAIL");
+    }
+    else if (strcmp(uart_cmd_buf, "eetest")  == 0) {
+        uint8_t w[8], r[8];
+        int i, pass = 1;
+        /* 写递增序列 0x00~0x07 到地址 0x10 */
+        for (i = 0; i < 8; i++) w[i] = i;
+        eeprom_write_buf(0x10, w, 8);
+        R_BSP_SoftwareDelay(50, BSP_DELAY_UNITS_MILLISECONDS);
+        /* 回读比对 */
+        eeprom_read_buf(0x10, r, 8);
+        printf("addr: 0x10 0x11 0x12 0x13 0x14 0x15 0x16 0x17\r\n");
+        printf("write:"); for (i=0;i<8;i++) printf("  %02X ", w[i]);
+        printf("\r\nread: "); for (i=0;i<8;i++) { printf("  %02X ", r[i]); if (r[i]!=w[i]) pass=0; }
+        printf("\r\n%s\r\n", pass?"PASS":"FAIL");
     }
     else printf("? %s\r\n", uart_cmd_buf);
 }
