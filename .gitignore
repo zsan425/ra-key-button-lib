@@ -1,0 +1,31 @@
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Keil
+*.uvguix.*
+*.uvoptx
+JLinkLog.txt
+*.Administrator
+Listings/
+Objects/
+DebugConfig/
+RTE/
+*.uvprojx
+
+# FSP
+ra/
+ra_cfg/
+ra_gen/
+script/
+via/
+*.scat
+buildinfo.gpdsc
+configuration.xml
+rasc_*
+
+# IDE
+.vscode/
+.idea/
+*.bak
+*.orig
