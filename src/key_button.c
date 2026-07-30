@@ -34,6 +34,10 @@ void key_button_init(key_button_t *btn, bsp_io_port_pin_t pin,
     btn->long_triggered  = 0;
     btn->repeat_next_tick = 0;
     btn->events          = 0;
+
+    /* 读取当前真实电平，防止上电时按键已按下产生虚假事件 */
+    btn->stable_level = read_pin(btn);
+    btn->raw_last     = btn->stable_level;
 }
 
 /* ── 核心: 状态机扫描，每 1~5ms 调用一次 ── */
@@ -49,68 +53,71 @@ void key_button_tick(key_button_t *btn, uint32_t sys_tick)
 
     /* 电平变化 → 启动消抖 */
     if (raw != btn->raw_last) {
-        btn->raw_last     = raw;
+        btn->raw_last      = raw;
         btn->debounce_tick = sys_tick;
     }
 
-    /* 消抖未完成 */
-    if (btn->debounce_tick == DEBOUNCE_IDLE) goto check_periodic;
-    if ((sys_tick - btn->debounce_tick) < btn->cfg.debounce_ms) goto check_periodic;
+    do {
+        /* 消抖未完成 */
+        if (btn->debounce_tick == DEBOUNCE_IDLE) break;
+        if ((sys_tick - btn->debounce_tick) < btn->cfg.debounce_ms) break;
 
-    /* 消抖完成但电平没变 → 干扰 */
-    if (raw == btn->stable_level) {
+        /* 消抖完成但电平没变 → 干扰 */
+        if (raw == btn->stable_level) {
+            btn->debounce_tick = DEBOUNCE_IDLE;
+            break;
+        }
+
+        /* 确认电平变化 */
+        btn->stable_level  = raw;
         btn->debounce_tick = DEBOUNCE_IDLE;
-        goto check_periodic;
-    }
 
-    /* 确认电平变化 */
-    btn->stable_level  = raw;
-    btn->debounce_tick = DEBOUNCE_IDLE;
+        if (raw == 1) {
+            /* ── 按下 ── */
+            btn->press_tick     = sys_tick;
+            btn->long_triggered = 0;
+            btn->events        |= KEY_EVENT_PRESS;
 
-    if (raw == 1) {
-        /* ── 按下 ── */
-        btn->press_tick     = sys_tick;
-        btn->long_triggered = 0;
-        btn->events        |= KEY_EVENT_PRESS;
+            if (btn->state == KEY_ST_WAIT_DOUBLE && btn->click_cnt == 1)
+                btn->click_cnt = 2;   /* 双击窗口内再次按下 */
 
-        if (btn->state == KEY_ST_WAIT_DOUBLE && btn->click_cnt == 1)
-            btn->click_cnt = 2;   /* 双击窗口内再次按下 */
-
-        btn->state = KEY_ST_PRESSED;
-
-    } else {
-        /* ── 释放 ── */
-        btn->events |= KEY_EVENT_RELEASE;
-        elapsed = sys_tick - btn->press_tick;
-
-        if (btn->cfg.long_press_ms > 0 && btn->long_triggered) {
-            /* 长按后释放 → 不产生单击 */
-            btn->click_cnt = 0;
-            btn->state     = KEY_ST_IDLE;
-
-        } else if (btn->cfg.double_click_ms > 0 && elapsed < btn->cfg.long_press_ms) {
-            btn->release_tick = sys_tick;
-
-            if (btn->click_cnt >= 1) {
-                /* 第二下 → 双击 */
-                btn->click_cnt = 0;
-                btn->events   |= KEY_EVENT_DOUBLE_CLICK;
-                btn->state     = KEY_ST_IDLE;
-            } else {
-                /* 第一下 → 等双击窗口 */
-                btn->click_cnt = 1;
-                btn->state     = KEY_ST_WAIT_DOUBLE;
-            }
+            btn->state = KEY_ST_PRESSED;
 
         } else {
-            /* 双击禁用 → 直接单击 */
-            btn->events |= KEY_EVENT_CLICK;
-            btn->click_cnt = 0;
-            btn->state     = KEY_ST_IDLE;
-        }
-    }
+            /* ── 释放 ── */
+            btn->events |= KEY_EVENT_RELEASE;
+            elapsed = sys_tick - btn->press_tick;
 
-check_periodic:
+            if (btn->cfg.long_press_ms > 0 && btn->long_triggered) {
+                /* 长按后释放 → 不产生单击 */
+                btn->click_cnt = 0;
+                btn->state     = KEY_ST_IDLE;
+
+            } else if (btn->cfg.double_click_ms > 0 &&
+                       (btn->cfg.long_press_ms == 0 || elapsed < btn->cfg.long_press_ms)) {
+                btn->release_tick = sys_tick;
+
+                if (btn->click_cnt >= 1) {
+                    /* 第二下 → 双击 */
+                    btn->click_cnt = 0;
+                    btn->events   |= KEY_EVENT_DOUBLE_CLICK;
+                    btn->state     = KEY_ST_IDLE;
+                } else {
+                    /* 第一下 → 等双击窗口 */
+                    btn->click_cnt = 1;
+                    btn->state     = KEY_ST_WAIT_DOUBLE;
+                }
+
+            } else {
+                /* 双击禁用 → 直接单击 */
+                btn->events |= KEY_EVENT_CLICK;
+                btn->click_cnt = 0;
+                btn->state     = KEY_ST_IDLE;
+            }
+        }
+    } while (0);
+
+    /* ── 周期性检查 ── */
     /* 长按检测 */
     if (btn->stable_level == 1 && btn->cfg.long_press_ms > 0) {
         elapsed = sys_tick - btn->press_tick;
