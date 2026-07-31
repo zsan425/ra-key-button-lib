@@ -9,6 +9,7 @@ FSP_CPP_FOOTER
 #include "uart/uart.h"
 #include "eeprom/eeprom.h"
 #include "adc/adc.h"
+#include "dht11/dht11.h"
 
 void hal_entry(void)
 {
@@ -20,6 +21,7 @@ void hal_entry(void)
     uart_init();
     eeprom_init();
     adc_init();
+    /* dht11_init();   DHT11 烧了，新片到了取消注释 */
 
     printf("\r\n=== 启明6T2 调试串口 ===\r\n");
     printf("输入 help 查看指令\r\n");

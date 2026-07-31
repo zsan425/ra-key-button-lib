@@ -37,3 +37,19 @@ uint16_t adc_read_raw(uint8_t channel)
     R_ADC_B_Read(&g_adc0_ctrl, (adc_channel_t)channel, &data);
     return data;
 }
+
+/* ── 模拟温度传感器 ── */
+double adc_read_temp(uint8_t channel, adc_temp_type_t type)
+{
+    uint16_t raw = adc_read_raw(channel);
+    double v = (double)raw * 3.3 / 4095.0;
+
+    switch (type) {
+    case ADC_TEMP_LM35:     /* 10mV/°C */
+        return v * 100.0;
+    case ADC_TEMP_TMP36:    /* 10mV/°C, 500mV offset */
+        return (v - 0.5) * 100.0;
+    default:
+        return 0.0;
+    }
+}

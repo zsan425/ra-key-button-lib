@@ -2,6 +2,7 @@
 #include "led/led.h"
 #include "eeprom/eeprom.h"
 #include "adc/adc.h"
+#include "dht11/dht11.h"
 #include <string.h>
 
 /* ── 发送完成 ── */
@@ -75,14 +76,23 @@ void uart_process_cmd(void)
         eeprom_read_buf(0x00, m, 4);
         printf("%s (%02X%02X%02X%02X)\r\n",
                (m[0]==0xDE&&m[1]==0xAD&&m[2]==0xBE&&m[3]==0xEF)?"POWER-LOSS PASS":"FAIL",
-               m[0],m[1],m[2],m[3]);
+               m[0],m[1],m[2],m[3]); 
     }
-    else if (strcmp(uart_cmd_buf, "adc")      == 0) {
+    else if (strcmp(uart_cmd_buf, "pot")       == 0) {
         uint16_t raw = adc_read_raw(ADC_CHANNEL_15);
-        printf("VR: %.6fV (%d/4095)\r\n", (double)raw * 3.3 / 4095.0, raw);
+        printf("POT: %.6fV (%d/4095)\r\n", (double)raw * 3.3 / 4095.0, raw);
+    }
+    else if (strcmp(uart_cmd_buf, "lm35")      == 0)
+        printf("LM35: %.2f°C\r\n", adc_read_temp(ADC_CHANNEL_5, ADC_TEMP_LM35));
+    else if (strcmp(uart_cmd_buf, "dht11")    == 0) {
+        uint8_t h, t;
+        if (dht11_read(&h, &t) == 0)
+            printf("DHT11: %d%%RH  %d°C\r\n", h, t);
+        else
+            printf("DHT11: no response\r\n");
     }
     else if (strcmp(uart_cmd_buf, "help")     == 0) {
-        printf("led1/2 on/off  eeprom  eetest  eepower  eecheck  adc  help\r\n");
+        printf("led1/2 on/off  eeprom eetest eepower eecheck  pot lm35 dht11  help\r\n");
     }
     else if (strcmp(uart_cmd_buf, "eeprom")  == 0) {
         uint8_t d;
