@@ -1,6 +1,7 @@
 #include "uart.h"
 #include "led/led.h"
 #include "eeprom/eeprom.h"
+#include "adc/adc.h"
 #include <string.h>
 
 /* ── 发送完成 ── */
@@ -59,8 +60,29 @@ void uart_process_cmd(void)
     else if (strcmp(uart_cmd_buf, "led1 off") == 0) led_off(LED_1);
     else if (strcmp(uart_cmd_buf, "led2 on")  == 0) led_on(LED_2);
     else if (strcmp(uart_cmd_buf, "led2 off") == 0) led_off(LED_2);
+    else if (strcmp(uart_cmd_buf, "eepower")  == 0) {
+        uint8_t m[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+        eeprom_write_buf(0x00, m, 4);
+        R_BSP_SoftwareDelay(100, BSP_DELAY_UNITS_MILLISECONDS);  /* 确保写入完成 */
+        /* 立即回读验证 */
+        uint8_t v[4];
+        eeprom_read_buf(0x00, v, 4);
+        printf("verify: %02X %02X %02X %02X\r\n", v[0],v[1],v[2],v[3]);
+        printf("断电后重启输 eecheck\r\n");
+    }
+    else if (strcmp(uart_cmd_buf, "eecheck")  == 0) {
+        uint8_t m[4];
+        eeprom_read_buf(0x00, m, 4);
+        printf("%s (%02X%02X%02X%02X)\r\n",
+               (m[0]==0xDE&&m[1]==0xAD&&m[2]==0xBE&&m[3]==0xEF)?"POWER-LOSS PASS":"FAIL",
+               m[0],m[1],m[2],m[3]);
+    }
+    else if (strcmp(uart_cmd_buf, "adc")      == 0) {
+        uint16_t raw = adc_read_raw(ADC_CHANNEL_15);
+        printf("VR: %.6fV (%d/4095)\r\n", (double)raw * 3.3 / 4095.0, raw);
+    }
     else if (strcmp(uart_cmd_buf, "help")     == 0) {
-        printf("led1/2 on/off  eeprom  eetest  help\r\n");
+        printf("led1/2 on/off  eeprom  eetest  eepower  eecheck  adc  help\r\n");
     }
     else if (strcmp(uart_cmd_buf, "eeprom")  == 0) {
         uint8_t d;
@@ -73,7 +95,7 @@ void uart_process_cmd(void)
     }
     else if (strcmp(uart_cmd_buf, "eetest")  == 0) {
         uint8_t w[8], r[8];
-        int i, pass = 1;
+        uint8_t i, pass = 1;
         /* 写递增序列 0x00~0x07 到地址 0x10 */
         for (i = 0; i < 8; i++) w[i] = i;
         eeprom_write_buf(0x10, w, 8);
