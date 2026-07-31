@@ -10,6 +10,9 @@
 #define KEY2_PIN     BSP_IO_PORT_12_PIN_02
 #define KEY2_ACTIVE  BSP_IO_LEVEL_LOW
 
+/* ── 中断模式开关: 1=中断, 0=纯轮询 ── */
+#define KEY_USE_IRQ  1
+
 #define KEY_COUNT  2
 
 extern key_button_t g_key[KEY_COUNT];
@@ -18,5 +21,8 @@ extern key_button_t g_key[KEY_COUNT];
 
 void key_init(void);
 void key_scan(void);
+
+/* ── 中断触发计数 ── */
+extern volatile uint8_t g_key_irq[KEY_COUNT];
 
 #endif
