@@ -2,11 +2,21 @@
 #include <string.h>
 
 i2c_master_event_t g_i2c_callback_event;
-static unsigned int  timeout_ms = 500;
 
 void i2c_callback(i2c_master_callback_args_t *p_args)
 {
     g_i2c_callback_event = p_args->event;
+}
+
+/* ── 等待 TX_COMPLETE（500ms 超时，局部变量不跨函数共享）── */
+static int i2c_wait_tx(void)
+{
+    unsigned int t = 500;
+    while (t && g_i2c_callback_event != I2C_MASTER_EVENT_TX_COMPLETE) {
+        R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
+        t--;
+    }
+    return (t > 0) ? 0 : -1;
 }
 
 void eeprom_init(void)
@@ -22,29 +32,19 @@ fsp_err_t eeprom_write_byte(uint8_t addr, uint8_t data)
     buf[1] = data;
 
     R_IIC_B_MASTER_Write(&g_i2c_ctrl, buf, 2, false);
-    while ((I2C_MASTER_EVENT_TX_COMPLETE != g_i2c_callback_event) && timeout_ms) {
-        R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
-        timeout_ms--;
-    }
-    timeout_ms = 500;
+    if (i2c_wait_tx()) return FSP_ERR_TIMEOUT;
+
     R_BSP_SoftwareDelay(5, BSP_DELAY_UNITS_MILLISECONDS);
     return FSP_SUCCESS;
 }
 
 fsp_err_t eeprom_read_byte(uint8_t addr, uint8_t *data)
 {
-    /* Step1: 写地址后发 STOP（不用 RESTART），只设地址指针不写数据 */
     R_IIC_B_MASTER_Write(&g_i2c_ctrl, &addr, 1, false);
-    while ((I2C_MASTER_EVENT_TX_COMPLETE != g_i2c_callback_event) && timeout_ms) {
-        R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
-        timeout_ms--;
-    }
-    timeout_ms = 500;
-    R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
+    if (i2c_wait_tx()) return FSP_ERR_TIMEOUT;
 
-    /* Step2: 从当前地址读（地址已在 step1 设好） */
-    R_IIC_B_MASTER_Read(&g_i2c_ctrl, data, 1, false);
     R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
+    R_IIC_B_MASTER_Read(&g_i2c_ctrl, data, 1, false);
     return FSP_SUCCESS;
 }
 
@@ -67,11 +67,8 @@ fsp_err_t eeprom_write_buf(uint8_t addr, uint8_t *buf, uint16_t len)
         memcpy(tmp + 1, buf + pos, chunk);
 
         R_IIC_B_MASTER_Write(&g_i2c_ctrl, tmp, (uint32_t)(chunk + 1), false);
-        while ((I2C_MASTER_EVENT_TX_COMPLETE != g_i2c_callback_event) && timeout_ms) {
-            R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
-            timeout_ms--;
-        }
-        timeout_ms = 500;
+        if (i2c_wait_tx()) return FSP_ERR_TIMEOUT;
+
         R_BSP_SoftwareDelay(5, BSP_DELAY_UNITS_MILLISECONDS);
         pos += chunk;
     }
@@ -84,11 +81,8 @@ fsp_err_t eeprom_read_buf(uint8_t addr, uint8_t *buf, uint16_t len)
     if ((uint32_t)addr + len > 256) return FSP_ERR_INVALID_ARGUMENT;
 
     R_IIC_B_MASTER_Write(&g_i2c_ctrl, &addr, 1, false);
-    while ((I2C_MASTER_EVENT_TX_COMPLETE != g_i2c_callback_event) && timeout_ms) {
-        R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
-        timeout_ms--;
-    }
-    timeout_ms = 500;
+    if (i2c_wait_tx()) return FSP_ERR_TIMEOUT;
+
     R_BSP_SoftwareDelay(1, BSP_DELAY_UNITS_MILLISECONDS);
     R_IIC_B_MASTER_Read(&g_i2c_ctrl, buf, (uint32_t)len, false);
     return FSP_SUCCESS;
