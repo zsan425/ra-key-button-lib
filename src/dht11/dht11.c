@@ -35,18 +35,17 @@ static uint8_t read_byte(void)
     uint8_t i, val = 0;
     for (i = 0; i < 8; i++)
     {
-        /* 等待 50μs 低电平结束 */
-        uint32_t t = 5000;
-        while (!pin_read() && --t);
-        /* 等待 50μs 低电平跳高 */
-        t = 5000;
-        while (pin_read() && --t);
+        uint32_t t;
 
-        /* 高电平 26~28μs = 0, 70μs = 1, 过 40μs 再读 */
+        /* 等到高脉冲开始（50μs 低电平结束，跳变到高）*/
+        t = 5000;
+        while (!pin_read() && --t);
+
+        /* 高脉冲中段采样: 高 70μs=1, 高 26~28μs=0 */
         delay_us(40);
         if (pin_read()) val |= (1 << (7 - i));
 
-        /* 等剩余高电平结束 */
+        /* 等高脉冲结束 */
         t = 5000;
         while (pin_read() && --t);
     }
